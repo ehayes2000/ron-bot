@@ -1,4 +1,5 @@
 import numpy as np
+import chess
 
 class SerializeBoard:
     def __init__(self, board=None, is_white=None):
@@ -11,42 +12,6 @@ class SerializeBoard:
                                      'Q': 4,
                                      'K': 5}
 
-    # TODO include move count
-    # TODO include castling
-    # TODO include player colro
-
-    def serialize_as_bitboards(self, board=None, is_white=None):
-        if self.board is None and board is None:
-            raise ValueError('self.board is uninitialized. set self.board or pass into function call.')
-        
-        bitboards = np.zeros(shape=(12, 8, 8))
-        
-        for index, piece in board.piece_map().items():
-            piece_str = str(piece)
-            bitboard_index = None
-            if piece_str not in self.bitboard_piece_index:
-                bitboard_index = self.bitboard_piece_index[piece_str.upper()] + 6
-            else:
-                bitboard_index = self.bitboard_piece_index[piece_str]
-            if is_white is not None:
-                pass
-            bitboards[bitboard_index, index // 8, index % 8] = 1
-     
-            if self.is_white is not None:
-                bitboards = self._flip_by_color(bitboards, self.is_white)
-            else:
-                bitboards = self._flip_by_color(bitboards, is_white)
-        return [bitboards, None, None, None]
-
-    # flib bitboards st the color being played is always on the bottom
-    def _flip_by_color(self, bitboards, is_white):
-        if not self.is_white and not is_white:
-            raise ValueError ('is_white uninitialized. set self.is_white or pass to callee.')
-        if is_white:
-            for i in range(len(bitboards)):
-                bitboards[i] = np.flip(bitboards[i], axis=0)
-        return bitboards
-
     def _flip_vertical(self, bitboard):
         k1 = int(0x00FF00FF00FF00FF)
         k2 = int(0x0000FFFF0000FFFF)
@@ -55,29 +20,63 @@ class SerializeBoard:
         bitboard = (bitboard  >> 32)       |  (bitboard       << 32)
         return bitboard
 
-    def mirror_horizontal(x):
+    def _mirror_horizontal(self, bitboard):
         k1 = int(0x5555555555555555)
         k2 = int(0x3333333333333333)
         k4 = int(0x0f0f0f0f0f0f0f0f)
-        x = ((x >> 1) & k1) | ((x & k1) << 1);
-        x = ((x >> 2) & k2) | ((x & k2) << 2);
-        x = ((x >> 4) & k4) | ((x & k4) << 4);
-        return x;
-        
-    def serialize_as_bitboards_bitwise(board, is_white=None):
-        kings = board.kings
-        knights = board.knights
-        queens = board.queens  
-        pawns = board.pawns
-        rooks = board.rooks
-        bishops = board.bishops
-        white_bitmask = board.occupied_co[0]
+        bitboard = ((bitboard >> 1) & k1) | ((bitboard & k1) << 1);
+        bitboard = ((bitboard >> 2) & k2) | ((bitboard & k2) << 2);
+        bitboard = ((bitboard >> 4) & k4) | ((bitboard & k4) << 4);
+        return bitboard;
 
-serializer = SerializeBoard()
-import chess
+    
+    def _rotate_180(self, bitboard):
+        return self.mirror_horizontal(self.flip_vertical(bitboard))
+
+    def _serialize_castling_rights(self, board, is_white):
+        raise NotImplementedError('write this method')
+
+    def serialize_as_bitboards_bitwise(self, board, is_white):
+        if is_white is None and self.is_white is None:
+            raise ValueError('is_white uninitialized. Initialize self.is_white or pass in function call')
+
+        white_mask = board.occupied_co[chess.WHITE]
+        black_mask = board.occupied_co[chess.BLACK]
+
+        bitboards = [
+            board.pawns   & white_mask,  # w_pawns
+            board.rooks   & white_mask,  # w_rooks
+            board.knights & white_mask,  # w_knights
+            board.bishops & white_mask,  # w_bishops
+            board.queens  & white_mask,  # w_queen
+            board.kings   & white_mask,  # w_king
+            board.pawns   & black_mask,  # b_pawns
+            board.rooks   & black_mask,  # b_rooks
+            board.knights & black_mask,  # b_knights
+            board.bishops & black_mask,  # b_bishops
+            board.queens  & black_mask,  # b_queen
+            board.kings   & black_mask,  # b_king
+        ]
+
+        # orientate st player is always at bottom of board
+        if is_white is False or self.is_white is False:
+            for i in range(len(bitboards)):
+                bitboards[i] = self._rotate_180(bitboards[i])
+
+        return bitboards
+    
+
+
 board = chess.Board()
+board.push(chess.Move.from_uci('e2e4'))
+serializer = SerializeBoard()
+bitboards = serializer.serialize_as_bitboards_bitwise(board, True)
 
-pawns = board.pawns
-bitmask = board.occupied_co[0]
-print(pawns & bitmask)
+import sys
+sys.path.append('../')
+from ext.bitboard_viewer import show_bitboard
+
+for i in bitboards:
+    print(end='\n')
+    show_bitboard(i)
 
