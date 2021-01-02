@@ -1,5 +1,5 @@
 
-def show_bitboard(bitboard: int) -> None:
+def show_bitboard(bitboard):
     bits = []
     while bitboard > 0:
         bits.append(bitboard % 2);
@@ -18,4 +18,9 @@ def show_bitboard(bitboard: int) -> None:
         if (i + 1) % 8 == 0 and i != 0:
             print(end='\n')
 
-
+def show_bitboard_array(bitboard):
+    for i in range(64):
+        print(int(bitboard[i]), end=' ')
+        if (i + 1) % 8 == 0:
+            print(end='\n')
+            
